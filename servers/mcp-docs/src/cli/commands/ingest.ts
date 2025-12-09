@@ -17,14 +17,18 @@ Usage: mcp-docs ingest [options]
 
 Options:
   --source=<name>   Ingest only the specified source
+  --group=<name>    Ingest all sources in the specified group
+  --crawl-limit=<n> Override max pages to crawl (firecrawl sources only)
   --resume          Resume from last incomplete ingestion
   --dry-run         Preview what would be ingested without writing to DB
   --help, -h        Show this help message
 
 Examples:
-  mcp-docs ingest                      # Ingest all sources
-  mcp-docs ingest --source=bun         # Ingest only 'bun' source
-  mcp-docs ingest --dry-run            # Preview all sources
+  mcp-docs ingest                       # Ingest all sources
+  mcp-docs ingest --source=bun          # Ingest only 'bun' source
+  mcp-docs ingest --group=azure         # Ingest all sources in 'azure' group
+  mcp-docs ingest --crawl-limit=10      # Quick test with only 10 pages
+  mcp-docs ingest --dry-run             # Preview all sources
   mcp-docs ingest --source=bun --dry-run
 `;
 
@@ -69,12 +73,31 @@ export async function ingestCommand(args: string[]) {
   // Parse flags
   const sourceFlag = args.find((arg) => arg.startsWith("--source="));
   const targetSource = sourceFlag?.split("=")[1];
+  const groupFlag = args.find((arg) => arg.startsWith("--group="));
+  const targetGroup = groupFlag?.split("=")[1];
+  const crawlLimitFlag = args.find((arg) => arg.startsWith("--crawl-limit="));
+  const crawlLimitOverride = crawlLimitFlag
+    ? parseInt(crawlLimitFlag.split("=")[1] || "", 10)
+    : undefined;
   const resume = args.includes("--resume");
   const dryRun = args.includes("--dry-run");
 
   if (args.includes("--help") || args.includes("-h")) {
     console.log(HELP_TEXT);
     return;
+  }
+
+  if (targetSource && targetGroup) {
+    console.error("Error: Cannot specify both --source and --group");
+    process.exit(1);
+  }
+
+  if (
+    crawlLimitOverride !== undefined &&
+    (Number.isNaN(crawlLimitOverride) || crawlLimitOverride <= 0)
+  ) {
+    console.error("Error: --crawl-limit must be a positive number");
+    process.exit(1);
   }
 
   if (dryRun) {
@@ -95,13 +118,32 @@ export async function ingestCommand(args: string[]) {
   // Load all sources from database
   const allSources = await sourcesService.getAllSources();
 
-  const sourcesToIngest = targetSource
-    ? allSources.filter((s) => s.name === targetSource)
-    : allSources;
+  let sourcesToIngest = allSources;
 
-  if (sourcesToIngest.length === 0) {
-    logger.error(`Source "${targetSource}" not found`);
-    process.exit(1);
+  if (targetSource) {
+    sourcesToIngest = allSources.filter((s) => s.name === targetSource);
+    if (sourcesToIngest.length === 0) {
+      logger.error(`Source "${targetSource}" not found`);
+      process.exit(1);
+    }
+  } else if (targetGroup) {
+    sourcesToIngest = allSources.filter((s) => s.groupName === targetGroup);
+    if (sourcesToIngest.length === 0) {
+      logger.error(`No sources found in group "${targetGroup}"`);
+      process.exit(1);
+    }
+  }
+
+  // Apply crawl limit override if specified
+  if (crawlLimitOverride !== undefined) {
+    logger.info(`Using crawl limit override: ${crawlLimitOverride}`);
+    sourcesToIngest = sourcesToIngest.map((s) => ({
+      ...s,
+      options: {
+        ...s.options,
+        crawlLimit: crawlLimitOverride,
+      },
+    }));
   }
 
   if (!dryRun) {

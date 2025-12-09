@@ -3,10 +3,7 @@
  */
 
 import { parseArgs } from "node:util";
-import {
-  docSourceSchema,
-  SourcesService,
-} from "../../config/user-sources.js";
+import { docSourceSchema, SourcesService } from "../../config/user-sources.js";
 import { createDbClient } from "../../db/client.js";
 import { initializeDatabase } from "../../db/migrations.js";
 import { DocsRepository } from "../../db/repository.js";
@@ -17,14 +14,18 @@ Usage: mcp-docs source <subcommand> [options]
 
 Subcommands:
   add <name> <url>    Add a new documentation source (type auto-detected)
-  remove <name>       Remove a source
+  remove <name>       Remove a source (use --all for groups)
   list                List all sources
 
 Add Options:
+  --group=<name>         Add source to a group (creates group if needed)
   --crawl-limit=<n>      Max pages to crawl (firecrawl only, default: 100)
   --include-optional     Include optional entries (llms_txt only)
   --include-paths=<p>    Comma-separated paths to include (firecrawl only)
   --exclude-paths=<p>    Comma-separated paths to exclude (firecrawl only)
+
+Remove Options:
+  --all                  Required when removing a group (removes all sources in group)
 
 Auto-Detection:
   1. URLs ending in llms.txt or llms-full.txt are used directly
@@ -40,11 +41,12 @@ Path Filtering:
 
 Examples:
   mcp-docs source add react react.dev
-  mcp-docs source add otel opentelemetry.io/docs
+  mcp-docs source add azure-core learn.microsoft.com/azure --group=azure
+  mcp-docs source add azure-sdk azure.github.io/azure-sdk --group=azure
   mcp-docs source add nextjs nextjs.org/docs --crawl-limit=200
-  mcp-docs source add mysite example.com --exclude-paths=blog/*,changelog/*
   mcp-docs source list
   mcp-docs source remove react
+  mcp-docs source remove azure --all
 `;
 
 export async function sourceCommand(args: string[]) {
@@ -206,16 +208,16 @@ async function detectSourceType(input: string): Promise<DetectedSource> {
 }
 
 /**
- * Extract the path prefix from a URL pathname.
- * e.g., "/docs/" -> "docs", "/docs/intro" -> "docs"
+ * Extract the full path prefix from a URL pathname.
+ * e.g., "/docs/" -> "docs", "/en-us/azure/ai-foundry/" -> "en-us/azure/ai-foundry"
  */
 function extractPathPrefix(pathname: string): string | null {
-  // Remove leading/trailing slashes and split
-  const parts = pathname.replace(/^\/|\/$/g, "").split("/");
+  // Remove leading/trailing slashes
+  const cleaned = pathname.replace(/^\/|\/$/g, "");
 
-  // If there's at least one meaningful path segment, use it
-  if (parts.length > 0 && parts[0] && parts[0] !== "") {
-    return parts[0];
+  // If there's a meaningful path, return the full path
+  if (cleaned && cleaned !== "") {
+    return cleaned;
   }
 
   return null;
@@ -225,6 +227,7 @@ async function handleAdd(args: string[], service: SourcesService) {
   const { values, positionals } = parseArgs({
     args,
     options: {
+      group: { type: "string" },
       "crawl-limit": { type: "string" },
       "include-optional": { type: "boolean", default: false },
       "include-paths": { type: "string" },
@@ -255,6 +258,11 @@ async function handleAdd(args: string[], service: SourcesService) {
     type: detected.type,
     url: detected.url,
   };
+
+  // Add to group if specified
+  if (values.group) {
+    source.groupName = values.group;
+  }
 
   // Build options
   const hasOptions =
@@ -315,6 +323,9 @@ async function handleAdd(args: string[], service: SourcesService) {
   console.log(`\nAdded source '${name}'`);
   console.log(`  Type: ${detected.type}`);
   console.log(`  URL: ${detected.url}`);
+  if (source.groupName) {
+    console.log(`  Group: ${source.groupName}`);
+  }
   if (source.options) {
     if (source.options.crawlLimit) {
       console.log(`  Crawl limit: ${source.options.crawlLimit}`);
@@ -330,17 +341,52 @@ async function handleAdd(args: string[], service: SourcesService) {
 }
 
 async function handleRemove(args: string[], service: SourcesService) {
-  if (args.length < 1) {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      all: { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+
+  if (positionals.length < 1) {
     console.error("Error: remove requires <name>");
     process.exit(1);
   }
 
-  const name = args[0];
+  const name = positionals[0];
   if (!name) {
     console.error("Error: source name is required");
     process.exit(1);
   }
 
+  // Check if this is a group name
+  const isGroup = await service.isGroup(name);
+
+  if (isGroup) {
+    if (!values.all) {
+      const sources = await service.getSourcesInGroup(name);
+      console.error(
+        `Error: '${name}' is a group with ${sources.length} sources.`,
+      );
+      console.error(`Use --all to remove the entire group.`);
+      console.error(`\nSources in group:`);
+      for (const source of sources) {
+        console.error(`  - ${source.name}`);
+      }
+      process.exit(1);
+    }
+
+    // Remove the entire group
+    const removedNames = await service.removeGroup(name);
+    console.log(`Removed group '${name}' and ${removedNames.length} sources:`);
+    for (const sourceName of removedNames) {
+      console.log(`  - ${sourceName}`);
+    }
+    return;
+  }
+
+  // It's a regular source
   const removed = await service.removeSource(name);
 
   if (removed) {
@@ -360,16 +406,60 @@ async function handleList(service: SourcesService) {
     return;
   }
 
-  console.log("Documentation sources:\n");
+  // Organize sources by group
+  const groups = new Map<string, DocSource[]>();
+  const standalone: DocSource[] = [];
+
   for (const source of sources) {
-    console.log(`  ${source.name}`);
-    console.log(`    Type: ${source.type}`);
-    console.log(`    URL: ${source.url}`);
-    if (source.options) {
-      console.log(`    Options: ${JSON.stringify(source.options)}`);
+    if (source.groupName) {
+      const group = groups.get(source.groupName) || [];
+      group.push(source);
+      groups.set(source.groupName, group);
+    } else {
+      standalone.push(source);
     }
-    console.log();
   }
 
-  console.log(`Total: ${sources.length} sources`);
+  console.log("Sources:\n");
+
+  // Print groups first
+  const groupNames = Array.from(groups.keys()).sort();
+  for (const groupName of groupNames) {
+    const groupSources = groups.get(groupName) || [];
+    console.log(`├─ ${groupName} (group, ${groupSources.length} sources)`);
+
+    for (let i = 0; i < groupSources.length; i++) {
+      const source = groupSources[i];
+      if (!source) continue;
+      const isLast = i === groupSources.length - 1;
+      const prefix = isLast ? "└─" : "├─";
+      const padUrl =
+        source.url.length > 40 ? `${source.url.slice(0, 37)}...` : source.url;
+      console.log(
+        `│  ${prefix} ${source.name.padEnd(16)} ${padUrl.padEnd(42)} ${source.type}`,
+      );
+    }
+  }
+
+  // Print standalone sources
+  for (let i = 0; i < standalone.length; i++) {
+    const source = standalone[i];
+    if (!source) continue;
+    const isLast = i === standalone.length - 1 && groups.size === 0;
+    const prefix = isLast ? "└─" : "├─";
+    const padUrl =
+      source.url.length > 40 ? `${source.url.slice(0, 37)}...` : source.url;
+    console.log(
+      `${prefix} ${source.name.padEnd(16)} ${padUrl.padEnd(42)} ${source.type}`,
+    );
+  }
+
+  // Summary
+  const groupCount = groups.size;
+  const sourceCount = sources.length;
+  if (groupCount > 0) {
+    console.log(`\n${sourceCount} sources (${groupCount} groups)`);
+  } else {
+    console.log(`\n${sourceCount} sources`);
+  }
 }
