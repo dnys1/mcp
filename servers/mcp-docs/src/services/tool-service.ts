@@ -9,6 +9,12 @@ export interface SearchSourceParams {
   limit?: number;
 }
 
+export interface SearchGroupParams {
+  query: string;
+  sources: string[];
+  limit?: number;
+}
+
 export interface ToolResponse {
   [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;
@@ -77,7 +83,9 @@ export class ToolService {
       embedding = result.embedding;
       cache.set(params.query, embedding);
       const embeddingTimeMs = performance.now() - embeddingStart;
-      this.log.debug("Generated embedding", { ms: Math.round(embeddingTimeMs) });
+      this.log.debug("Generated embedding", {
+        ms: Math.round(embeddingTimeMs),
+      });
     }
 
     // Hybrid search (semantic + keyword)
@@ -104,6 +112,91 @@ export class ToolService {
           {
             type: "text",
             text: `No results found for "${params.query}" in ${source} documentation.`,
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: formatResultsAsMarkdown(results),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Search documentation across multiple sources (for groups) using hybrid search.
+   */
+  async searchGroupDocs(
+    groupName: string,
+    params: SearchGroupParams,
+  ): Promise<ToolResponse> {
+    const startTime = performance.now();
+    const limit = params.limit ?? 5;
+
+    this.log.debug("Searching group docs", {
+      group: groupName,
+      sources: params.sources,
+      query: params.query,
+      limit,
+    });
+
+    // Get embedding for semantic search
+    const cache = getEmbeddingCache();
+    let embedding = cache.get(params.query);
+    const cacheHit = !!embedding;
+
+    if (!embedding) {
+      const embeddingStart = performance.now();
+      const embeddingModel = getEmbeddingModel();
+      const result = await embed({
+        model: embeddingModel,
+        value: params.query,
+      });
+      embedding = result.embedding;
+      cache.set(params.query, embedding);
+      const embeddingTimeMs = performance.now() - embeddingStart;
+      this.log.debug("Generated embedding", {
+        ms: Math.round(embeddingTimeMs),
+      });
+    }
+
+    // Search across all sources in the group
+    const dbStart = performance.now();
+    const allResults = await Promise.all(
+      params.sources.map((source) =>
+        this.repo.searchChunksHybrid(embedding, params.query, {
+          source,
+          limit: Math.ceil(limit / params.sources.length) + 2,
+        }),
+      ),
+    );
+
+    // Merge and re-rank results
+    const mergedResults = allResults.flat();
+    mergedResults.sort((a, b) => a.distance - b.distance);
+    const results = mergedResults.slice(0, limit);
+
+    const dbTimeMs = performance.now() - dbStart;
+
+    this.log.info("Group search completed", {
+      group: groupName,
+      query: params.query.slice(0, 50),
+      results: results.length,
+      cacheHit,
+      dbMs: Math.round(dbTimeMs),
+      totalMs: Math.round(performance.now() - startTime),
+    });
+
+    if (results.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No results found for "${params.query}" in ${groupName} documentation.`,
           },
         ],
       };

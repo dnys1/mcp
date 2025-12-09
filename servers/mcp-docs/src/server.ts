@@ -5,23 +5,13 @@ import { SourcesService } from "./config/user-sources.js";
 import { createDbClient } from "./db/client.js";
 import { initializeDatabase } from "./db/migrations.js";
 import { DocsRepository } from "./db/repository.js";
+import { generateGroupDescription } from "./services/description-service.js";
 import { ToolService } from "./services/tool-service.js";
 import type { DocSource } from "./types/index.js";
 import { logger } from "./utils/logger.js";
 
 /**
- * Generate a default description for a source if none provided.
- */
-function getSourceDescription(source: DocSource): string {
-  if (source.description) {
-    return source.description;
-  }
-  // Generate a generic description
-  return `Search ${source.name} documentation.`;
-}
-
-/**
- * Register a search tool for a documentation source.
+ * Register a search tool for a standalone documentation source.
  */
 function registerSourceTool(
   server: McpServer,
@@ -29,7 +19,8 @@ function registerSourceTool(
   source: DocSource,
 ): void {
   const toolName = `search_${source.name}_docs`;
-  const description = getSourceDescription(source);
+  const description =
+    source.description || `Search ${source.name} documentation.`;
 
   server.registerTool(
     toolName,
@@ -55,6 +46,55 @@ function registerSourceTool(
   logger.debug("Registered tool", { tool: toolName });
 }
 
+/**
+ * Register a search tool for a group of documentation sources.
+ */
+async function registerGroupTool(
+  server: McpServer,
+  toolService: ToolService,
+  groupName: string,
+  sources: DocSource[],
+): Promise<void> {
+  const toolName = `search_${groupName}_docs`;
+  const sourceNames = sources.map((s) => s.name);
+  const sourceDescriptions = sources
+    .map((s) => s.description)
+    .filter((d): d is string => !!d);
+
+  // Generate description for the group based on source descriptions
+  const description = await generateGroupDescription(
+    groupName,
+    sourceDescriptions,
+  );
+
+  server.registerTool(
+    toolName,
+    {
+      description,
+      inputSchema: {
+        query: z.string().describe("Search query"),
+        limit: z
+          .number()
+          .optional()
+          .default(5)
+          .describe("Number of results to return (default: 5)"),
+      },
+    },
+    async (args) => {
+      return toolService.searchGroupDocs(groupName, {
+        query: args.query as string,
+        sources: sourceNames,
+        limit: args.limit as number | undefined,
+      });
+    },
+  );
+
+  logger.debug("Registered group tool", {
+    tool: toolName,
+    sources: sourceNames,
+  });
+}
+
 export async function startServer() {
   // Initialize dependencies
   const db = createDbClient();
@@ -67,20 +107,44 @@ export async function startServer() {
   // Load all sources from database
   const sources = await sourcesService.getAllSources();
 
+  // Organize sources by group
+  const groups = new Map<string, DocSource[]>();
+  const standalone: DocSource[] = [];
+
+  for (const source of sources) {
+    if (source.groupName) {
+      const group = groups.get(source.groupName) || [];
+      group.push(source);
+      groups.set(source.groupName, group);
+    } else {
+      standalone.push(source);
+    }
+  }
+
   // Create MCP server
   const server = new McpServer({
     name: "mcp-docs",
     version: "1.0.0",
   });
 
-  // Register a search tool for each source
-  for (const source of sources) {
+  // Register tools for groups
+  for (const [groupName, groupSources] of groups.entries()) {
+    await registerGroupTool(server, toolService, groupName, groupSources);
+  }
+
+  // Register tools for standalone sources
+  for (const source of standalone) {
     registerSourceTool(server, toolService, source);
   }
 
+  const toolCount = groups.size + standalone.length;
+  const groupNames = Array.from(groups.keys());
+  const standaloneNames = standalone.map((s) => s.name);
+
   logger.info("Registered documentation tools", {
-    count: sources.length,
-    sources: sources.map((s) => s.name),
+    tools: toolCount,
+    groups: groupNames,
+    standalone: standaloneNames,
   });
 
   // Graceful shutdown handlers
