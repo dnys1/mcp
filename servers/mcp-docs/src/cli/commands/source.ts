@@ -224,6 +224,25 @@ function extractPathPrefix(pathname: string): string | null {
 }
 
 async function handleAdd(args: string[], service: SourcesService) {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`
+Usage: mcp-docs source add <name> <url> [options]
+
+Options:
+  --group=<name>         Add source to a group (creates group if needed)
+  --crawl-limit=<n>      Max pages to crawl (firecrawl only, default: 100)
+  --include-optional     Include optional entries (llms_txt only)
+  --include-paths=<p>    Comma-separated paths to include (firecrawl only)
+  --exclude-paths=<p>    Comma-separated paths to exclude (firecrawl only)
+
+Examples:
+  mcp-docs source add react react.dev
+  mcp-docs source add azure-core learn.microsoft.com/azure --group=azure
+  mcp-docs source add nextjs nextjs.org/docs --crawl-limit=200
+`);
+    return;
+  }
+
   const { values, positionals } = parseArgs({
     args,
     options: {
@@ -239,6 +258,7 @@ async function handleAdd(args: string[], service: SourcesService) {
   if (positionals.length < 2) {
     console.error("Error: add requires <name> <url>");
     console.log("\nUsage: mcp-docs source add <name> <url> [options]");
+    console.log("Run 'mcp-docs source add --help' for more options.");
     process.exit(1);
   }
 
@@ -341,6 +361,20 @@ async function handleAdd(args: string[], service: SourcesService) {
 }
 
 async function handleRemove(args: string[], service: SourcesService) {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`
+Usage: mcp-docs source remove <name> [options]
+
+Options:
+  --all    Required when removing a group (removes all sources in group)
+
+Examples:
+  mcp-docs source remove react
+  mcp-docs source remove azure --all
+`);
+    return;
+  }
+
   const { values, positionals } = parseArgs({
     args,
     options: {
@@ -351,6 +385,7 @@ async function handleRemove(args: string[], service: SourcesService) {
 
   if (positionals.length < 1) {
     console.error("Error: remove requires <name>");
+    console.log("Run 'mcp-docs source remove --help' for usage.");
     process.exit(1);
   }
 
