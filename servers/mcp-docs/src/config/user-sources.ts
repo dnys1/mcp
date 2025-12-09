@@ -18,6 +18,7 @@ export const docSourceSchema = z.object({
   type: z.enum(["llms_txt", "firecrawl"]),
   url: z.string().url(),
   description: z.string().optional(),
+  groupName: z.string().optional(),
   options: sourceOptionsSchema.optional(),
 });
 
@@ -50,15 +51,18 @@ export class SourcesService {
         url: row.base_url,
       };
 
+      if (row.description) {
+        source.description = row.description;
+      }
+
+      if (row.group_name) {
+        source.groupName = row.group_name;
+      }
+
       if (row.options) {
         try {
           const parsed = JSON.parse(row.options);
-          // Extract description from options if present
-          if (parsed.description) {
-            source.description = parsed.description;
-            delete parsed.description;
-          }
-          // Only set options if there are remaining fields
+          // Only set options if there are fields
           if (Object.keys(parsed).length > 0) {
             source.options = parsed;
           }
@@ -78,21 +82,21 @@ export class SourcesService {
     // Validate the source
     docSourceSchema.parse(source);
 
-    // Combine description and options into a single JSON field
-    const optionsWithDescription = {
-      ...source.options,
-      ...(source.description ? { description: source.description } : {}),
-    };
-    const hasOptions = Object.keys(optionsWithDescription).length > 0;
+    const hasOptions = source.options && Object.keys(source.options).length > 0;
 
     await this.repo.upsertSource({
       name: source.name,
       type: source.type,
       baseUrl: source.url,
-      options: hasOptions ? JSON.stringify(optionsWithDescription) : null,
+      options: hasOptions ? JSON.stringify(source.options) : null,
+      groupName: source.groupName ?? null,
+      description: source.description ?? null,
     });
 
-    log.info("Saved source", { name: source.name });
+    log.info("Saved source", {
+      name: source.name,
+      ...(source.groupName && { groupName: source.groupName }),
+    });
   }
 
   /**
@@ -117,6 +121,67 @@ export class SourcesService {
   async sourceExists(name: string): Promise<boolean> {
     const source = await this.repo.getSourceByName(name);
     return source !== null;
+  }
+
+  /**
+   * Check if a name refers to a group.
+   */
+  async isGroup(name: string): Promise<boolean> {
+    return this.repo.isGroup(name);
+  }
+
+  /**
+   * Get all sources in a group.
+   */
+  async getSourcesInGroup(groupName: string): Promise<DocSource[]> {
+    const rows = await this.repo.getSourcesByGroup(groupName);
+
+    return rows.map((row) => {
+      const source: DocSource = {
+        name: row.name,
+        type: row.type as "llms_txt" | "firecrawl",
+        url: row.base_url,
+      };
+
+      if (row.description) {
+        source.description = row.description;
+      }
+
+      if (row.group_name) {
+        source.groupName = row.group_name;
+      }
+
+      if (row.options) {
+        try {
+          const parsed = JSON.parse(row.options);
+          if (Object.keys(parsed).length > 0) {
+            source.options = parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      return source;
+    });
+  }
+
+  /**
+   * Remove all sources in a group.
+   */
+  async removeGroup(groupName: string): Promise<string[]> {
+    const removedNames = await this.repo.removeGroup(groupName);
+    if (removedNames.length > 0) {
+      log.info("Removed group", { groupName, sources: removedNames });
+    }
+    return removedNames;
+  }
+
+  /**
+   * Get distinct group names.
+   */
+  async listGroups(): Promise<string[]> {
+    return this.repo.listGroups();
   }
 }
 

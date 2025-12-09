@@ -7,6 +7,8 @@ export interface SourceRow {
   base_url: string;
   last_ingested_at: string | null;
   doc_count?: number;
+  group_name: string | null;
+  description: string | null;
 }
 
 export interface SourceWithOptions {
@@ -15,6 +17,8 @@ export interface SourceWithOptions {
   type: string;
   base_url: string;
   options: string | null;
+  group_name: string | null;
+  description: string | null;
 }
 
 export interface DocumentRow {
@@ -45,6 +49,8 @@ export interface SourceStats {
   last_ingested_at: string | null;
   document_count: number;
   chunk_count: number;
+  group_name: string | null;
+  description: string | null;
 }
 
 export interface IngestionProgress {
@@ -66,11 +72,11 @@ export class DocsRepository {
 
   async listSources(): Promise<SourceRow[]> {
     const result = await this.db.execute(`
-      SELECT s.id, s.name, s.type, s.base_url, s.last_ingested_at, COUNT(d.id) as doc_count
+      SELECT s.id, s.name, s.type, s.base_url, s.last_ingested_at, s.group_name, s.description, COUNT(d.id) as doc_count
       FROM sources s
       LEFT JOIN documents d ON d.source_id = s.id
       GROUP BY s.id
-      ORDER BY s.name
+      ORDER BY COALESCE(s.group_name, s.name), s.name
     `);
 
     return result.rows.map((row) => ({
@@ -80,6 +86,8 @@ export class DocsRepository {
       base_url: row.base_url as string,
       last_ingested_at: row.last_ingested_at as string | null,
       doc_count: row.doc_count as number,
+      group_name: row.group_name as string | null,
+      description: row.description as string | null,
     }));
   }
 
@@ -91,13 +99,15 @@ export class DocsRepository {
         s.type,
         s.base_url,
         s.last_ingested_at,
+        s.group_name,
+        s.description,
         COUNT(DISTINCT d.id) as document_count,
         COUNT(c.id) as chunk_count
       FROM sources s
       LEFT JOIN documents d ON d.source_id = s.id
       LEFT JOIN chunks c ON c.document_id = d.id
       GROUP BY s.id
-      ORDER BY s.name
+      ORDER BY COALESCE(s.group_name, s.name), s.name
     `);
 
     return result.rows.map((row) => ({
@@ -108,6 +118,8 @@ export class DocsRepository {
       last_ingested_at: row.last_ingested_at as string | null,
       document_count: row.document_count as number,
       chunk_count: row.chunk_count as number,
+      group_name: row.group_name as string | null,
+      description: row.description as string | null,
     }));
   }
 
@@ -116,15 +128,19 @@ export class DocsRepository {
     type: string;
     baseUrl: string;
     options?: string | null;
+    groupName?: string | null;
+    description?: string | null;
   }): Promise<number> {
     const result = await this.db.execute({
       sql: `
-        INSERT INTO sources (name, type, base_url, options)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO sources (name, type, base_url, options, group_name, description)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
           type = excluded.type,
           base_url = excluded.base_url,
-          options = excluded.options
+          options = excluded.options,
+          group_name = excluded.group_name,
+          description = excluded.description
         RETURNING id
       `,
       args: [
@@ -132,6 +148,8 @@ export class DocsRepository {
         source.type,
         source.baseUrl,
         source.options ?? null,
+        source.groupName ?? null,
+        source.description ?? null,
       ],
     });
 
@@ -151,7 +169,7 @@ export class DocsRepository {
 
   async getSourceByName(name: string): Promise<SourceWithOptions | null> {
     const result = await this.db.execute({
-      sql: `SELECT id, name, type, base_url, options FROM sources WHERE name = ?`,
+      sql: `SELECT id, name, type, base_url, options, group_name, description FROM sources WHERE name = ?`,
       args: [name],
     });
 
@@ -164,14 +182,16 @@ export class DocsRepository {
       type: row.type as string,
       base_url: row.base_url as string,
       options: row.options as string | null,
+      group_name: row.group_name as string | null,
+      description: row.description as string | null,
     };
   }
 
   async listSourcesWithOptions(): Promise<SourceWithOptions[]> {
     const result = await this.db.execute(`
-			SELECT id, name, type, base_url, options
+			SELECT id, name, type, base_url, options, group_name, description
 			FROM sources
-			ORDER BY name
+			ORDER BY COALESCE(group_name, name), name
 		`);
 
     return result.rows.map((row) => ({
@@ -180,6 +200,8 @@ export class DocsRepository {
       type: row.type as string,
       base_url: row.base_url as string,
       options: row.options as string | null,
+      group_name: row.group_name as string | null,
+      description: row.description as string | null,
     }));
   }
 
@@ -214,6 +236,79 @@ export class DocsRepository {
     });
 
     return result.rows.length > 0;
+  }
+
+  /**
+   * Check if a group name exists (i.e., any source has this group_name).
+   */
+  async isGroup(name: string): Promise<boolean> {
+    const result = await this.db.execute({
+      sql: `SELECT COUNT(*) as count FROM sources WHERE group_name = ?`,
+      args: [name],
+    });
+    return (result.rows[0]?.count as number) > 0;
+  }
+
+  /**
+   * Get all sources in a group.
+   */
+  async getSourcesByGroup(groupName: string): Promise<SourceWithOptions[]> {
+    const result = await this.db.execute({
+      sql: `SELECT id, name, type, base_url, options, group_name, description
+            FROM sources WHERE group_name = ? ORDER BY name`,
+      args: [groupName],
+    });
+
+    return result.rows.map((row) => ({
+      id: row.id as number,
+      name: row.name as string,
+      type: row.type as string,
+      base_url: row.base_url as string,
+      options: row.options as string | null,
+      group_name: row.group_name as string | null,
+      description: row.description as string | null,
+    }));
+  }
+
+  /**
+   * Remove all sources in a group.
+   */
+  async removeGroup(groupName: string): Promise<string[]> {
+    const sources = await this.getSourcesByGroup(groupName);
+    const removedNames: string[] = [];
+
+    for (const source of sources) {
+      await this.removeSource(source.name);
+      removedNames.push(source.name);
+    }
+
+    return removedNames;
+  }
+
+  /**
+   * Get distinct group names.
+   */
+  async listGroups(): Promise<string[]> {
+    const result = await this.db.execute(`
+      SELECT DISTINCT group_name FROM sources
+      WHERE group_name IS NOT NULL
+      ORDER BY group_name
+    `);
+
+    return result.rows.map((row) => row.group_name as string);
+  }
+
+  /**
+   * Update a source's description.
+   */
+  async updateSourceDescription(
+    name: string,
+    description: string,
+  ): Promise<void> {
+    await this.db.execute({
+      sql: `UPDATE sources SET description = ? WHERE name = ?`,
+      args: [description, name],
+    });
   }
 
   // ============ Documents ============
@@ -324,6 +419,18 @@ export class DocsRepository {
     if (!row) return null;
 
     return { content_hash: row.content_hash as string };
+  }
+
+  /**
+   * Get all document URLs for a source (for cache exclusion).
+   */
+  async getDocumentUrls(sourceId: number): Promise<string[]> {
+    const result = await this.db.execute({
+      sql: `SELECT url FROM documents WHERE source_id = ?`,
+      args: [sourceId],
+    });
+
+    return result.rows.map((row) => row.url as string);
   }
 
   async upsertDocument(doc: {

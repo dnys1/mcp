@@ -10,7 +10,9 @@ export const SCHEMA = {
       options TEXT,
       is_user_defined INTEGER DEFAULT 0,
       last_ingested_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      group_name TEXT,
+      description TEXT
     )
   `,
 

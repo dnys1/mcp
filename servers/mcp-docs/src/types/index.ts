@@ -6,6 +6,8 @@ export interface DocSource {
   url: string;
   /** Description of what this documentation source covers (for tool discovery) */
   description?: string;
+  /** Group name for grouping multiple sources under a single search tool */
+  groupName?: string;
   options?: {
     crawlLimit?: number;
     includeOptional?: boolean;

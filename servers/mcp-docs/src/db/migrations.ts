@@ -44,6 +44,9 @@ async function runMigrations(db: Client): Promise<void> {
     "is_user_defined",
     "INTEGER DEFAULT 0",
   );
+  // Migration: Add group_name and description columns for source grouping
+  await addColumnIfNotExists(db, "sources", "group_name", "TEXT");
+  await addColumnIfNotExists(db, "sources", "description", "TEXT");
 }
 
 async function addColumnIfNotExists(

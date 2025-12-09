@@ -44,7 +44,10 @@ describe("SourcesService", () => {
 
       const sources = await service.listSources();
       expect(sources).toHaveLength(2);
-      expect(sources.map((s) => s.name).sort()).toEqual(["source-1", "source-2"]);
+      expect(sources.map((s) => s.name).sort()).toEqual([
+        "source-1",
+        "source-2",
+      ]);
     });
   });
 
