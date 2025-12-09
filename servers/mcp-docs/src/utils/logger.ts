@@ -81,13 +81,9 @@ function log(level: LogLevel, message: string, context?: LogContext): void {
   const format = getLogFormat();
   const output = format === "json" ? formatJson(entry) : formatText(entry);
 
-  if (level === "error") {
-    console.error(output);
-  } else if (level === "warn") {
-    console.warn(output);
-  } else {
-    console.log(output);
-  }
+  // Always write to stderr to avoid interfering with MCP stdio transport
+  // MCP uses stdout exclusively for JSON-RPC messages
+  console.error(output);
 }
 
 /**

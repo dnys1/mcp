@@ -1,8 +1,11 @@
 import type { Client } from "@libsql/client";
+import { logger } from "../utils/logger.js";
 import { SCHEMA } from "./schema.js";
 
+const log = logger.child({ module: "migrations" });
+
 export async function initializeDatabase(db: Client): Promise<void> {
-  console.log("Initializing database schema...");
+  log.debug("Initializing database schema");
 
   try {
     // Enable WAL mode for better concurrent access
@@ -11,32 +14,23 @@ export async function initializeDatabase(db: Client): Promise<void> {
     await db.execute("PRAGMA busy_timeout=5000");
 
     await db.execute(SCHEMA.sources);
-    console.log("  ✓ Created sources table");
-
     await db.execute(SCHEMA.documents);
-    console.log("  ✓ Created documents table");
-
     await db.execute(SCHEMA.chunks);
-    console.log("  ✓ Created chunks table");
-
     await db.execute(SCHEMA.chunksIndex);
-    console.log("  ✓ Created chunks embedding index");
-
     await db.execute(SCHEMA.chunksFts);
     await db.execute(SCHEMA.chunksFtsInsertTrigger);
     await db.execute(SCHEMA.chunksFtsDeleteTrigger);
     await db.execute(SCHEMA.chunksFtsUpdateTrigger);
-    console.log("  ✓ Created FTS5 search index");
-
     await db.execute(SCHEMA.ingestionProgress);
-    console.log("  ✓ Created ingestion_progress table");
 
     // Run migrations for existing databases
     await runMigrations(db);
 
-    console.log("Database schema initialized successfully");
+    log.debug("Database schema initialized");
   } catch (error) {
-    console.error("Error initializing database schema:", error);
+    log.error("Error initializing database schema", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }
@@ -67,7 +61,7 @@ async function addColumnIfNotExists(
       await db.execute(
         `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
       );
-      console.log(`  ✓ Added ${column} column to ${table}`);
+      log.debug("Added column", { table, column });
     }
   } catch {
     // Ignore errors - column might already exist or table doesn't exist yet
