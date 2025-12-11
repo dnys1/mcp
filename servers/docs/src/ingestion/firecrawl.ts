@@ -1,8 +1,7 @@
 import { logger } from "@mcp/shared/logger";
-import Firecrawl, { type CrawlJob } from "@mendable/firecrawl-js";
+import type Firecrawl from "@mendable/firecrawl-js";
+import type { CrawlJob } from "@mendable/firecrawl-js";
 import type { FetchedDocument } from "../types/index.js";
-
-const log = logger.child({ module: "firecrawl" });
 
 interface FirecrawlMetadata {
   title?: string;
@@ -50,133 +49,6 @@ function urlsToExcludePaths(urls: string[], baseUrl: string): string[] {
   }
 
   return paths;
-}
-
-export async function crawlWebDocs(
-  baseUrl: string,
-  options?: CrawlOptions,
-): Promise<FetchedDocument[]> {
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error("FIRECRAWL_API_KEY environment variable is required");
-  }
-
-  const limit = options?.crawlLimit || 100;
-
-  // Merge cached URLs into exclude paths
-  const cachedExcludes = options?.cachedUrls?.length
-    ? urlsToExcludePaths(options.cachedUrls, baseUrl)
-    : [];
-  const excludePaths = [...(options?.excludePaths || []), ...cachedExcludes];
-
-  log.info("Starting crawl", {
-    url: baseUrl,
-    limit,
-    ...(options?.includePaths?.length && {
-      includePaths: options.includePaths,
-    }),
-    ...(options?.excludePaths?.length && {
-      excludePaths: options.excludePaths.length,
-    }),
-    ...(cachedExcludes.length && {
-      cached: cachedExcludes.length,
-    }),
-  });
-
-  const firecrawl = new Firecrawl({ apiKey });
-
-  try {
-    // Use async crawl with polling to get progress updates
-    const crawlResponse = await firecrawl.startCrawl(baseUrl, {
-      limit,
-      ...(options?.includePaths?.length && {
-        includePaths: options.includePaths,
-      }),
-      ...(excludePaths.length && {
-        excludePaths,
-      }),
-      scrapeOptions: {
-        formats: ["markdown"],
-        onlyMainContent: true,
-      },
-    });
-
-    const crawlId = crawlResponse.id;
-    log.debug("Crawl started", { crawlId });
-
-    // Poll for completion with progress updates
-    let lastProgress = 0;
-    let result: CrawlJob;
-
-    while (true) {
-      result = await firecrawl.getCrawlStatus(crawlId);
-
-      if (result.status === "completed") {
-        log.info("Crawl completed", {
-          pages: result.data?.length || 0,
-        });
-        break;
-      }
-
-      if (result.status === "failed" || result.status === "cancelled") {
-        throw new Error(`Crawl ${result.status}`);
-      }
-
-      // Log progress updates
-      const current = result.completed || 0;
-      const total = result.total || limit;
-      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-
-      if (current > lastProgress) {
-        log.info("Crawling", {
-          progress: `${current}/${total} pages (${pct}%)`,
-          status: result.status,
-        });
-        lastProgress = current;
-      }
-
-      // Wait before polling again
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-
-    const pages = result.data || [];
-    log.info("Processing crawled pages", { count: pages.length });
-
-    const documents: FetchedDocument[] = pages.map((page: FirecrawlPage) => {
-      // URL can be in different places depending on Firecrawl version
-      const pageUrl =
-        page.url ||
-        page.metadata?.sourceURL ||
-        page.metadata?.ogUrl ||
-        page.metadata?.url ||
-        baseUrl;
-
-      // Use metadata title if available, otherwise extract from markdown
-      const title =
-        page.metadata?.title || extractTitle(page.markdown || "") || "Untitled";
-
-      // Clean markdown content (remove cookie banners, etc.)
-      const content = cleanMarkdown(page.markdown || "");
-
-      return {
-        url: pageUrl,
-        title: cleanTitle(title),
-        content,
-        path: extractPath(pageUrl, baseUrl),
-        metadata: {
-          sourceUrl: page.metadata?.sourceURL,
-        },
-      };
-    });
-
-    return documents;
-  } catch (error) {
-    log.error("Crawl failed", {
-      url: baseUrl,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
 }
 
 function extractTitle(markdown: string): string {
@@ -266,5 +138,136 @@ function extractPath(pageUrl: string, baseUrl: string): string {
     return path || "index";
   } catch {
     return "unknown";
+  }
+}
+
+/**
+ * Service for crawling web documentation using Firecrawl.
+ */
+export class FirecrawlService {
+  private log = logger.child({ module: "firecrawl" });
+
+  constructor(private firecrawl: Firecrawl) {}
+
+  async crawlWebDocs(
+    baseUrl: string,
+    options?: CrawlOptions,
+  ): Promise<FetchedDocument[]> {
+    const limit = options?.crawlLimit || 100;
+
+    // Merge cached URLs into exclude paths
+    const cachedExcludes = options?.cachedUrls?.length
+      ? urlsToExcludePaths(options.cachedUrls, baseUrl)
+      : [];
+    const excludePaths = [...(options?.excludePaths || []), ...cachedExcludes];
+
+    this.log.info("Starting crawl", {
+      url: baseUrl,
+      limit,
+      ...(options?.includePaths?.length && {
+        includePaths: options.includePaths,
+      }),
+      ...(options?.excludePaths?.length && {
+        excludePaths: options.excludePaths.length,
+      }),
+      ...(cachedExcludes.length && {
+        cached: cachedExcludes.length,
+      }),
+    });
+
+    try {
+      // Use async crawl with polling to get progress updates
+      const crawlResponse = await this.firecrawl.startCrawl(baseUrl, {
+        limit,
+        ...(options?.includePaths?.length && {
+          includePaths: options.includePaths,
+        }),
+        ...(excludePaths.length && {
+          excludePaths,
+        }),
+        scrapeOptions: {
+          formats: ["markdown"],
+          onlyMainContent: true,
+        },
+      });
+
+      const crawlId = crawlResponse.id;
+      this.log.debug("Crawl started", { crawlId });
+
+      // Poll for completion with progress updates
+      let lastProgress = 0;
+      let result: CrawlJob;
+
+      while (true) {
+        result = await this.firecrawl.getCrawlStatus(crawlId);
+
+        if (result.status === "completed") {
+          this.log.info("Crawl completed", {
+            pages: result.data?.length || 0,
+          });
+          break;
+        }
+
+        if (result.status === "failed" || result.status === "cancelled") {
+          throw new Error(`Crawl ${result.status}`);
+        }
+
+        // Log progress updates
+        const current = result.completed || 0;
+        const total = result.total || limit;
+        const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+
+        if (current > lastProgress) {
+          this.log.info("Crawling", {
+            progress: `${current}/${total} pages (${pct}%)`,
+            status: result.status,
+          });
+          lastProgress = current;
+        }
+
+        // Wait before polling again
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      const pages = result.data || [];
+      this.log.info("Processing crawled pages", { count: pages.length });
+
+      const documents: FetchedDocument[] = pages.map((page: FirecrawlPage) => {
+        // URL can be in different places depending on Firecrawl version
+        const pageUrl =
+          page.url ||
+          page.metadata?.sourceURL ||
+          page.metadata?.ogUrl ||
+          page.metadata?.url ||
+          baseUrl;
+
+        // Use metadata title if available, otherwise extract from markdown
+        const title =
+          page.metadata?.title ||
+          extractTitle(page.markdown || "") ||
+          "Untitled";
+
+        // Clean markdown content (remove cookie banners, etc.)
+        const content = cleanMarkdown(page.markdown || "");
+
+        return {
+          url: pageUrl,
+          title: cleanTitle(title),
+          content,
+          path: extractPath(pageUrl, baseUrl),
+          metadata: {
+            sourceUrl: page.metadata?.sourceURL,
+          },
+        };
+      });
+
+      return documents;
+    } catch (error) {
+      this.log.error("Crawl failed", {
+        url: baseUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 }

@@ -2,11 +2,15 @@
  * Ingest command - fetch and process documentation
  */
 
+import { openai } from "@ai-sdk/openai";
 import { logger } from "@mcp/shared/logger";
+import Firecrawl from "@mendable/firecrawl-js";
 import { SourcesService } from "../../config/user-sources.js";
 import { createDbClient } from "../../db/client.js";
 import { initializeDatabase } from "../../db/migrations.js";
 import { DocsRepository } from "../../db/repository.js";
+import { FirecrawlService } from "../../ingestion/firecrawl.js";
+import { DescriptionService } from "../../services/description-service.js";
 import {
   type DryRunResult,
   IngestionService,
@@ -110,7 +114,19 @@ export async function ingestCommand(args: string[]) {
 
   const db = createDbClient();
   const repo = new DocsRepository(db);
-  const ingestionService = new IngestionService(repo);
+
+  // Create services with dependencies
+  const firecrawlApiKey = process.env.FIRECRAWL_API_KEY;
+  const firecrawlService = firecrawlApiKey
+    ? new FirecrawlService(new Firecrawl({ apiKey: firecrawlApiKey }))
+    : undefined;
+  const descriptionService = new DescriptionService(openai("gpt-4.1-mini"));
+
+  const ingestionService = new IngestionService(
+    repo,
+    firecrawlService,
+    descriptionService,
+  );
   const sourcesService = new SourcesService(repo);
 
   await initializeDatabase(db);

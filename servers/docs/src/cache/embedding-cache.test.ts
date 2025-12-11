@@ -1,9 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  EmbeddingCache,
-  getEmbeddingCache,
-  resetEmbeddingCache,
-} from "./embedding-cache.js";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { EmbeddingCache } from "./embedding-cache.js";
 
 describe("EmbeddingCache", () => {
   let cache: EmbeddingCache;
@@ -149,28 +145,5 @@ describe("EmbeddingCache", () => {
     test("returns 0 hit rate when no requests", () => {
       expect(cache.getHitRate()).toBe(0);
     });
-  });
-});
-
-describe("Global cache", () => {
-  afterEach(() => {
-    resetEmbeddingCache();
-  });
-
-  test("getEmbeddingCache returns singleton", () => {
-    const cache1 = getEmbeddingCache();
-    const cache2 = getEmbeddingCache();
-
-    expect(cache1).toBe(cache2);
-  });
-
-  test("resetEmbeddingCache creates new instance", () => {
-    const cache1 = getEmbeddingCache();
-    cache1.set("query", [1, 2, 3]);
-
-    resetEmbeddingCache();
-
-    const cache2 = getEmbeddingCache();
-    expect(cache2.get("query")).toBeUndefined();
   });
 });

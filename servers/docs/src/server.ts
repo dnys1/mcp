@@ -1,12 +1,14 @@
+import { openai } from "@ai-sdk/openai";
 import { logger } from "@mcp/shared/logger";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { EmbeddingCache } from "./cache/embedding-cache.js";
 import { SourcesService } from "./config/user-sources.js";
 import { createDbClient } from "./db/client.js";
 import { initializeDatabase } from "./db/migrations.js";
 import { DocsRepository } from "./db/repository.js";
-import { generateGroupDescription } from "./services/description-service.js";
+import { DescriptionService } from "./services/description-service.js";
 import { ToolService } from "./services/tool-service.js";
 import type { DocSource } from "./types/index.js";
 
@@ -52,6 +54,7 @@ function registerSourceTool(
 async function registerGroupTool(
   server: McpServer,
   toolService: ToolService,
+  descriptionService: DescriptionService,
   groupName: string,
   sources: DocSource[],
 ): Promise<void> {
@@ -62,7 +65,7 @@ async function registerGroupTool(
     .filter((d): d is string => !!d);
 
   // Generate description for the group based on source descriptions
-  const description = await generateGroupDescription(
+  const description = await descriptionService.generateGroupDescription(
     groupName,
     sourceDescriptions,
   );
@@ -101,7 +104,10 @@ export async function startServer() {
   await initializeDatabase(db);
 
   const repo = new DocsRepository(db);
-  const toolService = new ToolService(repo);
+  const embeddingCache = new EmbeddingCache();
+  const descriptionService = new DescriptionService(openai("gpt-4.1-mini"));
+
+  const toolService = new ToolService(repo, embeddingCache);
   const sourcesService = new SourcesService(repo);
 
   // Load all sources from database
@@ -129,7 +135,13 @@ export async function startServer() {
 
   // Register tools for groups
   for (const [groupName, groupSources] of groups.entries()) {
-    await registerGroupTool(server, toolService, groupName, groupSources);
+    await registerGroupTool(
+      server,
+      toolService,
+      descriptionService,
+      groupName,
+      groupSources,
+    );
   }
 
   // Register tools for standalone sources

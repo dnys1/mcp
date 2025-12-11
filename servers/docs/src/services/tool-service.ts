@@ -1,6 +1,6 @@
 import { logger } from "@mcp/shared/logger";
 import { embed } from "ai";
-import { getEmbeddingCache } from "../cache/embedding-cache.js";
+import type { EmbeddingCache } from "../cache/embedding-cache.js";
 import { getEmbeddingModel } from "../config/embeddings.js";
 import type { DocsRepository } from "../db/repository.js";
 import {
@@ -50,7 +50,10 @@ function formatDocsAsMarkdown(
 export class ToolService {
   private log = logger.child({ service: "ToolService" });
 
-  constructor(private repo: DocsRepository) {}
+  constructor(
+    private repo: DocsRepository,
+    private embeddingCache: EmbeddingCache,
+  ) {}
 
   /**
    * Search documentation for a specific source.
@@ -138,8 +141,7 @@ export class ToolService {
     });
 
     // Get embedding for semantic search
-    const cache = getEmbeddingCache();
-    let embedding = cache.get(params.query);
+    let embedding = this.embeddingCache.get(params.query);
     const cacheHit = !!embedding;
 
     if (!embedding) {
@@ -150,7 +152,7 @@ export class ToolService {
         value: params.query,
       });
       embedding = result.embedding;
-      cache.set(params.query, embedding);
+      this.embeddingCache.set(params.query, embedding);
       const embeddingTimeMs = performance.now() - embeddingStart;
       this.log.debug("Generated embedding", {
         ms: Math.round(embeddingTimeMs),
@@ -262,8 +264,7 @@ export class ToolService {
     });
 
     // Get embedding for semantic search
-    const cache = getEmbeddingCache();
-    let embedding = cache.get(params.query);
+    let embedding = this.embeddingCache.get(params.query);
     const cacheHit = !!embedding;
 
     if (!embedding) {
@@ -274,7 +275,7 @@ export class ToolService {
         value: params.query,
       });
       embedding = result.embedding;
-      cache.set(params.query, embedding);
+      this.embeddingCache.set(params.query, embedding);
       const embeddingTimeMs = performance.now() - embeddingStart;
       this.log.debug("Generated embedding", {
         ms: Math.round(embeddingTimeMs),

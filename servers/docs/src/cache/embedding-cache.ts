@@ -170,25 +170,3 @@ export class EmbeddingCache {
     return query.toLowerCase().trim();
   }
 }
-
-// Singleton instance for the application
-let globalCache: EmbeddingCache | null = null;
-
-/**
- * Get the global embedding cache instance.
- */
-export function getEmbeddingCache(
-  options?: EmbeddingCacheOptions,
-): EmbeddingCache {
-  if (!globalCache) {
-    globalCache = new EmbeddingCache(options);
-  }
-  return globalCache;
-}
-
-/**
- * Reset the global cache (useful for testing).
- */
-export function resetEmbeddingCache(): void {
-  globalCache = null;
-}

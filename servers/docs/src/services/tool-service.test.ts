@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { EmbeddingCache } from "../cache/embedding-cache.js";
 import type { TestFixture } from "../test-utils/db.js";
 import {
   createMockEmbedding,
@@ -25,10 +26,12 @@ mock.module("ai", () => ({
 describe("ToolService.searchSourceDocs", () => {
   let fixture: TestFixture;
   let service: ToolService;
+  let embeddingCache: EmbeddingCache;
 
   beforeEach(async () => {
     fixture = await createSeededFixture();
-    service = new ToolService(fixture.repo);
+    embeddingCache = new EmbeddingCache();
+    service = new ToolService(fixture.repo, embeddingCache);
   });
 
   afterEach(async () => {
@@ -108,10 +111,12 @@ describe("ToolService.searchSourceDocs", () => {
 describe("ToolService Edge Cases", () => {
   let fixture: TestFixture;
   let service: ToolService;
+  let embeddingCache: EmbeddingCache;
 
   beforeEach(async () => {
     fixture = await createTestFixture();
-    service = new ToolService(fixture.repo);
+    embeddingCache = new EmbeddingCache();
+    service = new ToolService(fixture.repo, embeddingCache);
   });
 
   afterEach(async () => {

@@ -3,10 +3,10 @@ import { logger } from "@mcp/shared/logger";
 import type { DocsRepository, IngestionProgress } from "../db/repository.js";
 import { chunkDocument } from "../ingestion/chunker.js";
 import { embedInBatches } from "../ingestion/embedder.js";
-import { crawlWebDocs } from "../ingestion/firecrawl.js";
+import type { FirecrawlService } from "../ingestion/firecrawl.js";
 import { fetchLlmsTxtDocs } from "../ingestion/llms-txt.js";
 import type { DocSource, FetchedDocument } from "../types/index.js";
-import { generateSourceDescription } from "./description-service.js";
+import type { DescriptionService } from "./description-service.js";
 
 export interface IngestionOptions {
   resume?: boolean;
@@ -33,7 +33,11 @@ export interface DryRunResult {
 export class IngestionService {
   private log = logger.child({ service: "IngestionService" });
 
-  constructor(private repo: DocsRepository) {}
+  constructor(
+    private repo: DocsRepository,
+    private firecrawlService: FirecrawlService | undefined,
+    private descriptionService: DescriptionService,
+  ) {}
 
   async ingestSource(
     source: DocSource,
@@ -81,7 +85,7 @@ export class IngestionService {
     if (!description) {
       this.log.info("Generating description from document titles...");
       const titles = documents.map((d) => d.title);
-      description = await generateSourceDescription(
+      description = await this.descriptionService.generateSourceDescription(
         source.name,
         source.url,
         titles,
@@ -245,14 +249,19 @@ export class IngestionService {
   ): Promise<FetchedDocument[]> {
     if (source.type === "llms_txt") {
       return fetchLlmsTxtDocs(source.url, source.options);
-    } else if (source.type === "firecrawl") {
-      return crawlWebDocs(source.url, {
+    }
+    if (source.type === "firecrawl") {
+      if (!this.firecrawlService) {
+        throw new Error(
+          "FirecrawlService is required for firecrawl source type. Ensure FIRECRAWL_API_KEY is set.",
+        );
+      }
+      return this.firecrawlService.crawlWebDocs(source.url, {
         ...source.options,
         cachedUrls,
       });
-    } else {
-      throw new Error(`Unknown source type: ${source.type}`);
     }
+    throw new Error(`Unknown source type: ${source.type}`);
   }
 
   private performDryRun(

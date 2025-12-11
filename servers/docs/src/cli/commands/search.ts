@@ -10,6 +10,7 @@
  *   synthesis  - AI-synthesized answer
  */
 
+import { EmbeddingCache } from "../../cache/embedding-cache.js";
 import { createDbClient } from "../../db/client.js";
 import { DocsRepository } from "../../db/repository.js";
 import {
@@ -99,7 +100,8 @@ export async function searchCommand(args: string[]) {
 
   const db = createDbClient();
   const repo = new DocsRepository(db);
-  const toolService = new ToolService(repo);
+  const embeddingCache = new EmbeddingCache();
+  const toolService = new ToolService(repo, embeddingCache);
 
   // Verify source exists
   const sources = await repo.listSources();
