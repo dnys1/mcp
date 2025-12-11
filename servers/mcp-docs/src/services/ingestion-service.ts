@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
+import { logger } from "@mcp/shared/logger";
 import type { DocsRepository, IngestionProgress } from "../db/repository.js";
 import { chunkDocument } from "../ingestion/chunker.js";
 import { embedInBatches } from "../ingestion/embedder.js";
 import { crawlWebDocs } from "../ingestion/firecrawl.js";
 import { fetchLlmsTxtDocs } from "../ingestion/llms-txt.js";
 import type { DocSource, FetchedDocument } from "../types/index.js";
-import { logger } from "@mcp/shared/logger";
 import { generateSourceDescription } from "./description-service.js";
 
 export interface IngestionOptions {

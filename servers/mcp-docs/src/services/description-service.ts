@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
 import { logger } from "@mcp/shared/logger";
+import { generateText } from "ai";
 
 const log = logger.child({ service: "DescriptionService" });
 

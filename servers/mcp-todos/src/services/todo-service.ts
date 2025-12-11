@@ -1,3 +1,4 @@
+import { logger } from "@mcp/shared/logger";
 import type { TodoRepository } from "../db/repository.js";
 import type {
   CreateTodoInput,
@@ -6,7 +7,6 @@ import type {
   UpdateTodoInput,
 } from "../types/index.js";
 import { generateId } from "../utils/id.js";
-import { logger } from "@mcp/shared/logger";
 
 export class TodoService {
   private log = logger.child({ service: "TodoService" });

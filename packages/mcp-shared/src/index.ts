@@ -14,5 +14,10 @@
  * ```
  */
 
-export { logger, type Logger, type LogContext, type LogLevel } from "./logger.ts";
 export { createDbClient, type DbClientOptions } from "./db-client.ts";
+export {
+  type LogContext,
+  type Logger,
+  type LogLevel,
+  logger,
+} from "./logger.ts";

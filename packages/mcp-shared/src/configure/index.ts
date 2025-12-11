@@ -28,7 +28,11 @@
 
 import { prompt } from "../cli/prompt.ts";
 import { updateClaudeCodeConfig } from "./claude-code.ts";
-import type { EnvVarConfig, McpServerConfig, ResolvedEnvVars } from "./types.ts";
+import type {
+  EnvVarConfig,
+  McpServerConfig,
+  ResolvedEnvVars,
+} from "./types.ts";
 import { updateVSCodeMCPConfig } from "./vscode.ts";
 
 export type { EnvVarConfig, McpServerConfig } from "./types.ts";

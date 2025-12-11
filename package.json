@@ -1,7 +1,10 @@
 {
   "name": "mcp-servers",
   "private": true,
-  "workspaces": ["packages/*", "servers/*"],
+  "workspaces": [
+    "packages/*",
+    "servers/*"
+  ],
   "scripts": {
     "lint": "biome check",
     "lint:fix": "biome check --fix",

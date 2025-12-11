@@ -4,8 +4,8 @@
  */
 
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
 import { logger } from "@mcp/shared/logger";
+import { generateText } from "ai";
 
 const log = logger.child({ service: "SynthesisService" });
 
@@ -49,7 +49,8 @@ export async function synthesizeAnswer(
   const docsText = documents
     .map(
       (doc, i) =>
-        `### Document ${i + 1}: ${doc.title}\nURL: ${doc.url}\n\n${doc.content}`,``
+        `### Document ${i + 1}: ${doc.title}\nURL: ${doc.url}\n\n${doc.content}`,
+      ``,
     )
     .join("\n\n---\n\n");
 

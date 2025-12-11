@@ -1,6 +1,6 @@
+import { logger } from "@mcp/shared/logger";
 import Firecrawl, { type CrawlJob } from "@mendable/firecrawl-js";
 import type { FetchedDocument } from "../types/index.js";
-import { logger } from "@mcp/shared/logger";
 
 const log = logger.child({ module: "firecrawl" });
 

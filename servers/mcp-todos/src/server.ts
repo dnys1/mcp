@@ -1,3 +1,4 @@
+import { logger } from "@mcp/shared/logger";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -7,7 +8,6 @@ import { TodoRepository } from "./db/repository.js";
 import { ProjectService } from "./services/project-service.js";
 import { TodoService } from "./services/todo-service.js";
 import { ToolService } from "./services/tool-service.js";
-import { logger } from "@mcp/shared/logger";
 
 export async function startServer() {
   // Initialize dependencies

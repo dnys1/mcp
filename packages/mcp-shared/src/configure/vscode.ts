@@ -7,7 +7,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { prompt } from "../cli/prompt.ts";
-import type { McpServerConfig, ResolvedEnvVars, VSCodeMCPConfig } from "./types.ts";
+import type {
+  McpServerConfig,
+  ResolvedEnvVars,
+  VSCodeMCPConfig,
+} from "./types.ts";
 
 export async function updateVSCodeMCPConfig(
   config: McpServerConfig,

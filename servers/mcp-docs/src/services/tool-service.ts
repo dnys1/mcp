@@ -1,3 +1,4 @@
+import { logger } from "@mcp/shared/logger";
 import { embed } from "ai";
 import { getEmbeddingCache } from "../cache/embedding-cache.js";
 import { getEmbeddingModel } from "../config/embeddings.js";
@@ -6,7 +7,6 @@ import {
   cleanMarkdown,
   truncateContent,
 } from "../ingestion/markdown-cleaner.js";
-import { logger } from "@mcp/shared/logger";
 
 export interface SearchSourceParams {
   query: string;

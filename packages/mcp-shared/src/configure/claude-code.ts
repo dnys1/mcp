@@ -32,7 +32,8 @@ export async function updateClaudeCodeConfig(
 
   // Now add the config
   try {
-    const command = `claude mcp add ${config.name} --scope user ${envFlags} -- bun run ${distPath}`.trim();
+    const command =
+      `claude mcp add ${config.name} --scope user ${envFlags} -- bun run ${distPath}`.trim();
 
     console.log(`  Adding ${config.name} to Claude Code...`);
     execSync(command, { stdio: "pipe" });
@@ -50,8 +51,9 @@ export async function updateClaudeCodeConfig(
     } else {
       // Don't print the full error message as it may contain API keys
       console.error("  Failed to add MCP server to Claude Code");
-      const envExample = config.envVars?.length
-        ? ` -e ${config.envVars[0].name}=<your-key>`
+      const firstEnvVar = config.envVars?.[0];
+      const envExample = firstEnvVar
+        ? ` -e ${firstEnvVar.name}=<your-key>`
         : "";
       console.error(
         `  Try running manually: claude mcp add ${config.name} --scope user${envExample} -- bun run dist/index.js`,

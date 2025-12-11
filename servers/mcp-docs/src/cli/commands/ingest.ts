@@ -2,6 +2,7 @@
  * Ingest command - fetch and process documentation
  */
 
+import { logger } from "@mcp/shared/logger";
 import { SourcesService } from "../../config/user-sources.js";
 import { createDbClient } from "../../db/client.js";
 import { initializeDatabase } from "../../db/migrations.js";
@@ -10,7 +11,6 @@ import {
   type DryRunResult,
   IngestionService,
 } from "../../services/ingestion-service.js";
-import { logger } from "@mcp/shared/logger";
 
 const HELP_TEXT = `
 Usage: mcp-docs ingest [options]

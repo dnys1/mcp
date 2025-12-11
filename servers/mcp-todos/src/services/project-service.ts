@@ -1,9 +1,9 @@
 import { execSync } from "node:child_process";
 import { basename } from "node:path";
+import { logger } from "@mcp/shared/logger";
 import type { TodoRepository } from "../db/repository.js";
 import type { Project } from "../types/index.js";
 import { generateId } from "../utils/id.js";
-import { logger } from "@mcp/shared/logger";
 
 type GitInfo = {
   rootPath: string;
