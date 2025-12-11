@@ -33,6 +33,7 @@ export interface DocumentRow {
 }
 
 export interface ChunkSearchResult {
+  document_id: number;
   chunk_content: string;
   title: string;
   url: string;
@@ -445,6 +446,33 @@ export class DocsRepository {
     return result.rows.map((row) => row.url as string);
   }
 
+  /**
+   * Get documents by their IDs.
+   */
+  async getDocumentsByIds(documentIds: number[]): Promise<DocumentRow[]> {
+    if (documentIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = documentIds.map(() => "?").join(", ");
+    const result = await this.db.execute({
+      sql: `SELECT id, source_id, url, title, path, content, content_hash, metadata
+            FROM documents WHERE id IN (${placeholders})`,
+      args: documentIds,
+    });
+
+    return result.rows.map((row) => ({
+      id: row.id as number,
+      source_id: row.source_id as number,
+      url: row.url as string,
+      title: row.title as string,
+      path: row.path as string | null,
+      content: row.content as string,
+      content_hash: row.content_hash as string,
+      metadata: row.metadata as string | null,
+    }));
+  }
+
   async upsertDocument(doc: {
     sourceId: number;
     url: string;
@@ -509,6 +537,7 @@ export class DocsRepository {
 
     let sql = `
       SELECT
+        d.id as document_id,
         c.content as chunk_content,
         d.title,
         d.url,
@@ -551,6 +580,7 @@ export class DocsRepository {
     const result = await this.db.execute({ sql, args });
 
     return result.rows.map((row) => ({
+      document_id: row.document_id as number,
       chunk_content: row.chunk_content as string,
       title: row.title as string,
       url: row.url as string,
@@ -578,6 +608,7 @@ export class DocsRepository {
 
     let sql = `
       SELECT
+        d.id as document_id,
         c.content as chunk_content,
         d.title,
         d.url,
@@ -617,6 +648,7 @@ export class DocsRepository {
     const result = await this.db.execute({ sql, args });
 
     return result.rows.map((row) => ({
+      document_id: row.document_id as number,
       chunk_content: row.chunk_content as string,
       title: row.title as string,
       url: row.url as string,
