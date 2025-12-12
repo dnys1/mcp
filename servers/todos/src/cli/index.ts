@@ -17,6 +17,7 @@ import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
 import { projectCommand } from "./commands/project.js";
 import { showCommand } from "./commands/show.js";
+import { startCommand } from "./commands/start.js";
 
 const HELP_TEXT = `
 mcp-todos - Multi-project TODO management
@@ -25,6 +26,7 @@ Usage:
   mcp-todos <command> [options]
 
 Commands:
+  start             Start the MCP server
   add <title>       Add a new todo
   list              List todos for current project
   show <id>         Show todo details
@@ -55,6 +57,9 @@ async function main() {
   }
 
   switch (command) {
+    case "start":
+      await startCommand(args.slice(1));
+      break;
     case "add":
       await addCommand(args.slice(1));
       break;

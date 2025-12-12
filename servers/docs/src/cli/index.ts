@@ -18,6 +18,7 @@ import { configureCommand } from "./commands/configure.js";
 import { ingestCommand } from "./commands/ingest.js";
 import { searchCommand } from "./commands/search.js";
 import { sourceCommand } from "./commands/source.js";
+import { startCommand } from "./commands/start.js";
 import { statusCommand } from "./commands/status.js";
 
 const HELP_TEXT = `
@@ -27,6 +28,7 @@ Usage:
   mcp-docs <command> [options]
 
 Commands:
+  start       Start the MCP server
   source      Manage documentation sources
   ingest      Ingest documentation into the database
   search      Search documentation (for testing)
@@ -53,6 +55,9 @@ async function main() {
   }
 
   switch (command) {
+    case "start":
+      await startCommand(args.slice(1));
+      break;
     case "source":
       await sourceCommand(args.slice(1));
       break;

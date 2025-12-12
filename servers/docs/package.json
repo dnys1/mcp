@@ -5,14 +5,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "cli": "bun run src/cli/index.ts",
-    "build": "bun run src/cli/index.ts build",
-    "start": "bun run dist/index.js",
-    "start:dev": "bun run src/index.ts",
+    "build": "bun run src/index.ts build",
+    "start": "bun run dist/index.js start",
+    "start:dev": "bun run src/index.ts start",
     "typecheck": "tsc --noEmit"
   },
   "bin": {
-    "mcp-docs": "./src/cli/index.ts"
+    "mcp-docs": "./src/index.ts"
   },
   "dependencies": {
     "@mcp/shared": "workspace:*",
