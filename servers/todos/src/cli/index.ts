@@ -19,6 +19,7 @@ import { listCommand } from "./commands/list.js";
 import { projectCommand } from "./commands/project.js";
 import { showCommand } from "./commands/show.js";
 import { startCommand } from "./commands/start.js";
+import { tuiCommand } from "./commands/tui.js";
 
 const COMMANDS = new Set([
   "start",
@@ -69,7 +70,13 @@ async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
 
-  if (!command || command === "--help" || command === "-h") {
+  // No args: launch interactive TUI
+  if (!command) {
+    await tuiCommand();
+    return;
+  }
+
+  if (command === "--help" || command === "-h") {
     console.log(HELP_TEXT);
     process.exit(0);
   }

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "jsx": "react-jsx",
     "paths": {
       "@mcp/shared": ["../../packages/shared/src"],
       "@mcp/shared/*": ["../../packages/shared/src/*"]
