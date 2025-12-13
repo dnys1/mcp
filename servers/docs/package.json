@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build": "bun run src/index.ts build",
+    "cli": "bun run src/index.ts",
     "start": "bun run dist/index.js start",
     "start:dev": "bun run src/index.ts start",
     "typecheck": "tsc --noEmit"
