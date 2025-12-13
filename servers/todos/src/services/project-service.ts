@@ -10,6 +10,34 @@ type GitInfo = {
   remote: string | null;
 };
 
+/**
+ * Extract repository name from a git remote URL.
+ * Handles SSH (git@github.com:user/repo.git) and HTTPS (https://github.com/user/repo.git) formats.
+ */
+function parseRepoNameFromRemote(remote: string): string | null {
+  // Remove trailing .git if present
+  const cleaned = remote.replace(/\.git$/, "");
+
+  // SSH format: git@github.com:user/repo or git@github.com:org/repo
+  const sshMatch = cleaned.match(/^git@[^:]+:(.+)$/);
+  if (sshMatch?.[1]) {
+    const path = sshMatch[1];
+    return basename(path);
+  }
+
+  // HTTPS format: https://github.com/user/repo
+  try {
+    const url = new URL(cleaned);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const repoName = pathParts[pathParts.length - 1];
+    if (repoName) return repoName;
+  } catch {
+    // Not a valid URL
+  }
+
+  return null;
+}
+
 export class ProjectService {
   private log = logger.child({ service: "ProjectService" });
 
@@ -76,7 +104,11 @@ export class ProjectService {
       }
 
       // Create new project
-      const name = basename(gitInfo.rootPath);
+      // Prefer repo name from remote URL (works correctly for worktrees)
+      // Fall back to folder name if no remote or parsing fails
+      const name =
+        (gitInfo.remote && parseRepoNameFromRemote(gitInfo.remote)) ||
+        basename(gitInfo.rootPath);
       const project = await this.repo.createProject(
         generateId(),
         name,
