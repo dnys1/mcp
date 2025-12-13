@@ -33,7 +33,7 @@ export async function updateClaudeCodeConfig(
   // Now add the config
   try {
     const command =
-      `claude mcp add ${config.name} --scope user ${envFlags} -- bun run ${distPath}`.trim();
+      `claude mcp add ${config.name} --scope user ${envFlags} -- bun ${distPath} start`.trim();
 
     console.log(`  Adding ${config.name} to Claude Code...`);
     execSync(command, { stdio: "pipe" });
@@ -56,7 +56,7 @@ export async function updateClaudeCodeConfig(
         ? ` -e ${firstEnvVar.name}=<your-key>`
         : "";
       console.error(
-        `  Try running manually: claude mcp add ${config.name} --scope user${envExample} -- bun run dist/index.js`,
+        `  Try running manually: claude mcp add ${config.name} --scope user${envExample} -- bun ${distPath} start`,
       );
     }
     throw error;

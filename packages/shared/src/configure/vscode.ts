@@ -82,7 +82,7 @@ export async function updateVSCodeMCPConfig(
   vscodeConfig.servers[config.name] = {
     type: "stdio",
     command: "bun",
-    args: ["run", join(config.projectDir, "dist/index.js")],
+    args: [join(config.projectDir, "dist/index.js"), "start"],
     ...(hasEnvVars && { env: envVars }),
   };
 
